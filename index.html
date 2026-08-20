@@ -1,0 +1,2357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boss Movement</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000000;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    img {
+      -webkit-user-drag: none;
+      user-drag: none;
+      pointer-events: none;
+    }
+
+    /* Boss Container (anchored at its center) */
+    .boss-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      will-change: transform;
+    }
+
+    /* Central Core */
+    .core {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 180px;
+      height: auto;
+    }
+
+    /* Base styling for separate hand images */
+    .hand {
+      position: absolute;
+      width: 80px;
+      height: auto;
+      will-change: transform;
+      transition: width 0.3s ease;
+    }
+
+    .hand.hammer {
+      width: 130px;
+    }
+
+    .hand.wrench {
+      width: 80px;
+    }
+
+    /* Base relative offsets from boss center */
+    .top-left {
+      transform: translate(-190px, -190px);
+    }
+
+    .top-right {
+      transform: translate(110px, -190px);
+    }
+
+    .bottom-left {
+      transform: translate(-190px, 110px);
+    }
+
+    .bottom-right {
+      transform: translate(110px, 110px);
+    }
+
+    /* Player Container */
+    .player-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      will-change: transform;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* Glowing central white dot */
+    .player-dot {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 16px;
+      height: 16px;
+      background-color: #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #ffffff, 0 0 20px #ffffff, 0 0 30px rgba(255, 255, 255, 0.6);
+    }
+
+    /* Rotating container for the pointer triangle */
+    .player-pointer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      will-change: transform;
+    }
+
+    /* Small glowing triangle pointing towards cursor */
+    .player-triangle {
+      position: absolute;
+      top: -5px;
+      left: 13px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 9px solid #ffffff;
+      filter: drop-shadow(0 0 6px #ffffff) drop-shadow(0 0 10px #ffffff);
+    }
+
+    /* Boss Health Bar Container */
+    .boss-hp-container {
+      position: absolute;
+      top: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 420px;
+      max-width: 85vw;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 200;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity 0.6s ease;
+    }
+
+    .boss-hp-bar {
+      width: 100%;
+      height: 18px;
+      background-color: #2a0000;
+      border: 2px solid #550000;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 0 12px rgba(255, 0, 0, 0.4);
+      transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .boss-hp-bar.enraged {
+      border-color: #00d5ff;
+      box-shadow: 0 0 16px rgba(0, 213, 255, 0.6);
+    }
+
+    .boss-hp-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #cc0000, #ff3333);
+      box-shadow: 0 0 10px #ff2222;
+      will-change: width;
+      transition: background 0.4s ease;
+    }
+
+    .boss-hp-fill.enraged {
+      background: linear-gradient(90deg, #0088cc, #00d5ff, #ff3366);
+    }
+
+    .boss-name {
+      margin-top: 8px;
+      color: #ffffff;
+      font-family: "Arial Rounded MT Bold", "Arial Rounded", "Arial", sans-serif;
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+    }
+
+    /* Player Health Bar Container (Bottom-Left) */
+    .player-hp-container {
+      position: absolute;
+      bottom: 25px;
+      left: 25px;
+      width: 220px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      z-index: 200;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity 0.6s ease;
+    }
+
+    .player-hp-bar {
+      width: 100%;
+      height: 14px;
+      background-color: #001a2e;
+      border: 2px solid #005580;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0, 180, 255, 0.3);
+    }
+
+    .player-hp-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #0088cc, #00d5ff);
+      box-shadow: 0 0 8px #00d5ff;
+      will-change: width;
+    }
+
+    .player-hp-text {
+      margin-top: 6px;
+      color: #ffffff;
+      font-family: "Arial Rounded MT Bold", "Arial Rounded", "Arial", sans-serif;
+      font-size: 14px;
+      font-weight: bold;
+      letter-spacing: 0.8px;
+      text-shadow: 0 0 6px rgba(0, 213, 255, 0.8);
+    }
+
+    /* Pause Overlay */
+    .pause-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 300;
+      color: #ffffff;
+      font-family: "Arial Rounded MT Bold", "Arial Rounded", "Arial", sans-serif;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .pause-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .pause-title {
+      font-size: 48px;
+      letter-spacing: 4px;
+      text-shadow: 0 0 20px #00d5ff, 0 0 40px #00d5ff;
+      margin-bottom: 10px;
+    }
+
+    .pause-subtitle {
+      font-size: 18px;
+      color: #a0e6ff;
+      letter-spacing: 1px;
+    }
+
+    /* Death Overlay */
+    .death-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 0, 0, 0.85);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 350;
+      color: #ffffff;
+      font-family: "Arial Rounded MT Bold", "Arial Rounded", "Arial", sans-serif;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    .death-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .death-title {
+      font-size: 56px;
+      color: #ff3333;
+      letter-spacing: 5px;
+      text-shadow: 0 0 25px #ff0000, 0 0 50px #990000;
+      margin-bottom: 12px;
+    }
+
+    .death-btn {
+      margin-top: 25px;
+      padding: 12px 32px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #ffffff;
+      background: linear-gradient(135deg, #cc0000, #880000);
+      border: 2px solid #ff4444;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    .death-btn:hover {
+      background: linear-gradient(135deg, #ff1a1a, #aa0000);
+      transform: scale(1.05);
+      box-shadow: 0 0 22px rgba(255, 0, 0, 0.8);
+    }
+
+    /* Win Overlay */
+    .win-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 20, 30, 0.85);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 350;
+      color: #ffffff;
+      font-family: "Arial Rounded MT Bold", "Arial Rounded", "Arial", sans-serif;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    .win-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .win-title {
+      font-size: 56px;
+      color: #00d5ff;
+      letter-spacing: 5px;
+      text-shadow: 0 0 25px #0088cc, 0 0 50px #00d5ff;
+      margin-bottom: 12px;
+    }
+
+    .win-btn {
+      margin-top: 25px;
+      padding: 12px 32px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #ffffff;
+      background: linear-gradient(135deg, #0088cc, #004488);
+      border: 2px solid #00d5ff;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(0, 213, 255, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    .win-btn:hover {
+      background: linear-gradient(135deg, #00b3ff, #0066cc);
+      transform: scale(1.05);
+      box-shadow: 0 0 22px rgba(0, 213, 255, 0.8);
+    }
+
+    /* Game Canvas overlay for bullets and particle explosions */
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 90;
+    }
+  </style>
+</head>
+<body>
+
+  <audio id="bg-music" src="music.mp3" loop preload="auto"></audio>
+
+  <script>
+    const bgMusic = document.getElementById('bg-music');
+    bgMusic.volume = 1.0;
+
+    function startBackgroundMusic() {
+      bgMusic.play().catch(() => {});
+      window.removeEventListener('pointerdown', startBackgroundMusic);
+      window.removeEventListener('keydown', startBackgroundMusic);
+      window.removeEventListener('touchstart', startBackgroundMusic);
+    }
+
+    window.addEventListener('pointerdown', startBackgroundMusic, { once: true });
+    window.addEventListener('keydown', startBackgroundMusic, { once: true });
+    window.addEventListener('touchstart', startBackgroundMusic, { once: true });
+  </script>
+
+  <!-- Boss Health Bar -->
+  <div class="boss-hp-container" id="boss-hp-container">
+    <div class="boss-hp-bar" id="boss-hp-bar">
+      <div class="boss-hp-fill" id="hp-fill"></div>
+    </div>
+    <div class="boss-name">The Mechanic</div>
+  </div>
+
+  <!-- Player Health Bar -->
+  <div class="player-hp-container" id="player-hp-container">
+    <div class="player-hp-bar">
+      <div class="player-hp-fill" id="player-hp-fill"></div>
+    </div>
+    <div class="player-hp-text" id="player-hp-text">HP: 75 / 75</div>
+  </div>
+
+  <!-- Pause Screen Overlay -->
+  <div class="pause-overlay" id="pause-overlay">
+    <div class="pause-title">PAUSED</div>
+    <div class="pause-subtitle">Press [P] to Resume</div>
+  </div>
+
+  <!-- Death Screen Overlay -->
+  <div class="death-overlay" id="death-overlay">
+    <div class="death-title">TARGET. SCRAPPED.</div>
+    <div class="pause-subtitle">The Mechanic vanquished you</div>
+    <button class="death-btn" onclick="restartGame()">RESPAWN</button>
+  </div>
+
+  <!-- Win Screen Overlay -->
+  <div class="win-overlay" id="win-overlay">
+    <div class="win-title">VICTORY</div>
+    <div class="pause-subtitle">The Mechanic has been destroyed</div>
+    <button class="win-btn" onclick="restartGame()">PLAY AGAIN</button>
+  </div>
+
+  <!-- Bullet & Particle Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <div class="boss-container" id="boss">
+    <!-- Center Core -->
+    <img src="core.png" alt="Core" class="core">
+
+    <!-- Separate Hands with smooth lerp follow -->
+    <img src="upleft.png" alt="Hand Top Left" class="hand top-left" id="hand-tl">
+    <img src="upright.png" alt="Hand Top Right" class="hand top-right" id="hand-tr">
+    <img src="bottomleft.png" alt="Hand Bottom Left" class="hand bottom-left" id="hand-bl">
+    <img src="bottomright.png" alt="Hand Bottom Right" class="hand bottom-right" id="hand-br">
+  </div>
+
+  <!-- Player character with glowing dot and mouse-aimed triangle pointer -->
+  <div class="player-container" id="player">
+    <div class="player-dot"></div>
+    <div class="player-pointer" id="player-pointer">
+      <div class="player-triangle"></div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const boss = document.getElementById('boss');
+    const pauseOverlay = document.getElementById('pause-overlay');
+    const deathOverlay = document.getElementById('death-overlay');
+    const winOverlay = document.getElementById('win-overlay');
+    const bossHpBar = document.getElementById('boss-hp-bar');
+    const hpFill = document.getElementById('hp-fill');
+    const bossHpContainer = document.getElementById('boss-hp-container');
+    const playerHpContainer = document.getElementById('player-hp-container');
+    const playerHpFill = document.getElementById('player-hp-fill');
+    const playerHpText = document.getElementById('player-hp-text');
+    const player = document.getElementById('player');
+    const playerPointer = document.getElementById('player-pointer');
+
+    const hands = [
+      document.getElementById('hand-tl'),
+      document.getElementById('hand-tr'),
+      document.getElementById('hand-bl'),
+      document.getElementById('hand-br')
+    ];
+
+    let isPaused = false;
+    let isDead = false;
+    let isWon = false;
+    let isBossDying = false;
+    let bossDeathStartTime = 0;
+    let lastBossDeathShotTime = 0;
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let isMouseDown = false;
+
+    // Boss State
+    const maxHp = 1500;
+    let currentHp = 1500;
+    let displayHp = 1500;
+
+    let currentX = window.innerWidth / 2;
+    let currentY = window.innerHeight * 0.25;
+    let targetX = currentX;
+    let targetY = currentY;
+    let vx = 0;
+    let vy = 0;
+    let time = 0;
+
+    let attackState = 'IDLE';
+    let nextAttackTime = performance.now() + 1500;
+    let lastAttack = null;
+    let lastP2Attack = null;
+    let mainAttacksSinceCharge = 0;
+
+    // Hand sub-attacks (Phase 1)
+    let handSubState = 'IDLE';
+    let nextHandAttackTime = performance.now() + 2000;
+    let handSubChargeStart = 0;
+    let handSubIndices = [];
+    let handSubShotsFired = 0;
+    let handSubLastShot = 0;
+
+    // Phase states
+    let phase2Triggered = false;
+    let isPhase2 = false;
+    let isCutscene = false;
+    let cutsceneStartTime = 0;
+    let cutsceneSwapped = false;
+
+    // Hand positions & configs
+    const handPositions = [
+      { x: currentX - 190 + 40, y: currentY - 190 + 40 },
+      { x: currentX + 110 + 40, y: currentY - 190 + 40 },
+      { x: currentX - 190 + 40, y: currentY + 110 + 40 },
+      { x: currentX + 110 + 40, y: currentY + 110 + 40 }
+    ];
+
+    const handConfigs = [
+      { floatAmpX: 12, floatAmpY: 8, floatFreqX: 0.9, floatFreqY: 0.7, phase: 0, speed: 0.08 },
+      { floatAmpX: 10, floatAmpY: 10, floatFreqX: 0.7, floatFreqY: 0.9, phase: 1.5, speed: 0.08 },
+      { floatAmpX: 14, floatAmpY: 6, floatFreqX: 0.8, floatFreqY: 0.6, phase: 3.0, speed: 0.08 },
+      { floatAmpX: 8, floatAmpY: 12, floatFreqX: 0.6, floatFreqY: 0.8, phase: 4.5, speed: 0.08 }
+    ];
+
+    const baseOffsets = [
+      { x: -190, y: -190 },
+      { x: 110,  y: -190 },
+      { x: -190, y: 110 },
+      { x: 110,  y: 110 }
+    ];
+
+    // Player State
+    const maxPlayerHp = 75;
+    let playerHp = 75;
+    let displayPlayerHp = 75;
+    let playerX = window.innerWidth / 2;
+    let playerY = window.innerHeight * 0.75;
+    const playerSpeed = 5;
+    let lastShootTime = 0;
+    const shootInterval = 100;
+
+    // Projectiles & Particles arrays
+    const bullets = [];
+    const bossBullets = [];
+    const crescentProjectiles = [];
+    const particles = [];
+
+    // Phase 2 Spin Attack Variables
+    let spinStartTime = 0;
+    let lastSpinShotTime = 0;
+    let lastSpinCrescentTime = 0;
+    let lastSpinShockwaveTime = 0;
+    let crescentAngleTracker = 0;
+    let hammerRotation = 0;
+    let hammerSingleSpin = false;
+    let hammerSpinAngle = 0;
+    let lastHammerSpinTrigger = 0;
+
+    // Wrench Transformation Variables (At 500 HP)
+    let wrenchTriggered = false;
+    let wrenchHandIndex = -1;
+    let wrenchTransitioning = false;
+    let wrenchStartTime = 0;
+    let wrenchRotation = 0;
+
+    // Phase 2 Independent Laser Balls Array
+    const laserBalls = [];
+    let wrenchSummonState = 'IDLE';
+    let wrenchSummonTarget = { x: 0, y: 0 };
+    let wrenchSummonStart = 0;
+
+    // Wrench Sweep Attack Variables (At <= 450 HP)
+    let wrenchSweepPhase = 'MOVE_LEFT';
+    let wrenchSweepStartTime = 0;
+    let wrenchSweepOrbs = [];
+    let wrenchSweepLastOrbTime = 0;
+
+    // Phase 2 Fountain / Leaf-fall Attack Variables
+    let fountainPhase = 'FOUNTAIN';
+    let fountainStartTime = 0;
+    let lastFountainShotTime = 0;
+
+    // Attack 2 variables
+    let spiralStartTime = 0;
+    let spiralAngle = 0;
+    let lastSpiralShotTime = 0;
+
+    // Attack 3 variables
+    let obeliskPhase = 'CHARGE';
+    let obeliskStartTime = 0;
+    const obeliskChargeDuration = 6000;
+    let obeliskLockStartTime = 0;
+    let obeliskBeamStartTime = 0;
+    let lastObeliskSpreadTime = 0;
+    let obeliskChargeRadius = 0;
+    const obeliskMaxRadius = 65;
+    let obeliskLockedX = 0;
+    let obeliskLockedY = 0;
+    const obeliskBeamWidth = 110;
+    let lastObeliskDamageTime = 0;
+
+    // Attack 4 variables
+    let swingHandIndices = [];
+    let swingStartTime = 0;
+    const swingDuration = 480;
+    let swingCrescentPositions = [];
+
+    // Shockwave Attack variables
+    let shockwaveStartTime = 0;
+    let shockwavePhase = 'CHARGE';
+
+    // Special Bullet Rain Attack variables
+    let bulletRainTriggered = false;
+    let bulletRainStartTime = 0;
+    let handRotateAngle = 0;
+    let lastRainShotTime = 0;
+
+    // Boundaries
+    const paddingX = 150;
+    const paddingTop = 100;
+
+    function pickNewTarget(forceRandom = false) {
+      if (!forceRandom && Math.random() < 0.6) {
+        targetX = playerX + (Math.random() - 0.5) * 200;
+        targetY = Math.min(window.innerHeight * 0.45, playerY - 150 + (Math.random() - 0.5) * 100);
+      } else {
+        targetX = paddingX + Math.random() * (window.innerWidth - paddingX * 2);
+        targetY = paddingTop + Math.random() * (window.innerHeight * 0.35);
+      }
+    }
+
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (e.touches && e.touches[0]) {
+        mouseX = e.touches[0].clientX;
+        mouseY = e.touches[0].clientY;
+      }
+    });
+
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 0) isMouseDown = true;
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 0) isMouseDown = false;
+    });
+
+    const keys = { w: false, a: false, s: false, d: false };
+
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'p' && !isDead) {
+        isPaused = !isPaused;
+        if (isPaused) {
+          pauseOverlay.classList.add('active');
+        } else {
+          pauseOverlay.classList.remove('active');
+        }
+      }
+      if (key === 'h') {
+        currentHp = 455;
+        displayHp = 455;
+      }
+      if (key in keys) keys[key] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (key in keys) keys[key] = false;
+    });
+
+    window.addEventListener('blur', () => {
+      keys.w = false;
+      keys.a = false;
+      keys.s = false;
+      keys.d = false;
+      isMouseDown = false;
+    });
+
+    function restartGame() {
+      isDead = false;
+      isWon = false;
+      isBossDying = false;
+      keys.w = false;
+      keys.a = false;
+      keys.s = false;
+      keys.d = false;
+      isMouseDown = false;
+      playerHp = maxPlayerHp;
+      displayPlayerHp = maxPlayerHp;
+      deathOverlay.classList.remove('active');
+      winOverlay.classList.remove('active');
+      boss.style.display = 'block';
+      boss.style.opacity = '1';
+
+      currentHp = maxHp;
+      displayHp = maxHp;
+      playerX = window.innerWidth / 2;
+      playerY = window.innerHeight * 0.75;
+
+      attackState = 'IDLE';
+      nextAttackTime = performance.now() + 1000;
+      handSubState = 'IDLE';
+      isPhase2 = false;
+      phase2Triggered = false;
+      wrenchTriggered = false;
+      wrenchTransitioning = false;
+      wrenchHandIndex = -1;
+      wrenchRotation = 0;
+      wrenchSummonState = 'IDLE';
+      wrenchSweepPhase = 'MOVE_LEFT';
+      hammerRotation = 0;
+
+      bullets.length = 0;
+      bossBullets.length = 0;
+      crescentProjectiles.length = 0;
+      particles.length = 0;
+      laserBalls.length = 0;
+      wrenchSweepOrbs.length = 0;
+
+      const handBl = document.getElementById('hand-bl');
+      if (handBl) {
+        handBl.src = 'bottomleft.png';
+        handBl.classList.remove('hammer');
+      }
+      ['hand-tr', 'hand-br'].forEach(id => {
+        const h = document.getElementById(id);
+        if (h) {
+          h.src = id === 'hand-tr' ? 'upright.png' : 'bottomright.png';
+          h.classList.remove('wrench');
+        }
+      });
+
+      bossHpContainer.style.opacity = '1';
+      playerHpContainer.style.opacity = '1';
+      bossHpBar.classList.remove('enraged');
+      hpFill.classList.remove('enraged');
+    }
+
+    function triggerDeath() {
+      if (isDead) return;
+      isDead = true;
+      deathOverlay.classList.add('active');
+    }
+
+    function update() {
+      if (isPaused || isDead) {
+        requestAnimationFrame(update);
+        return;
+      }
+
+      time += 0.02;
+      const now = performance.now();
+
+      const floatX = Math.sin(time * 0.8) * 8;
+      const floatY = Math.cos(time * 0.6) * 12;
+      let renderCoreX = currentX + floatX;
+      let renderCoreY = currentY + floatY;
+
+      // Enraged visual state below 800 HP
+      if (currentHp <= 800) {
+        bossHpBar.classList.add('enraged');
+        hpFill.classList.add('enraged');
+      }
+
+      // Smooth unspinning of hammer rotation angles
+      if (attackState !== 'P2_ATTACK_SPIN' && !hammerSingleSpin) {
+        hammerRotation %= (Math.PI * 2);
+        hammerRotation += (0 - hammerRotation) * 0.12;
+        if (Math.abs(hammerRotation) < 0.005) hammerRotation = 0;
+      }
+
+      // Smooth unspinning of wrench rotation angles
+      if (wrenchSummonState === 'IDLE' && attackState !== 'P2_ATTACK_WRENCH_SWEEP' && attackState !== 'P2_ATTACK_LASER_BALL') {
+        wrenchRotation %= (Math.PI * 2);
+        wrenchRotation += (0 - wrenchRotation) * 0.12;
+        if (Math.abs(wrenchRotation) < 0.005) wrenchRotation = 0;
+      }
+
+      // Check Phase 2 Trigger at 750 HP
+      if (currentHp <= 750 && !phase2Triggered) {
+        phase2Triggered = true;
+        isCutscene = true;
+        attackState = 'CUTSCENE_PHASE2';
+        handSubState = 'IDLE';
+        cutsceneStartTime = now;
+        cutsceneSwapped = false;
+
+        bossHpContainer.style.opacity = '0';
+        playerHpContainer.style.opacity = '0';
+
+        bullets.length = 0;
+        bossBullets.length = 0;
+        crescentProjectiles.length = 0;
+        laserBalls.length = 0;
+      }
+
+      // Handle Boss Death Phase
+      if (isBossDying) {
+        const deathElapsed = now - bossDeathStartTime;
+
+        // Uncontrollable movement & severe shake
+        vx += (Math.random() - 0.5) * 5.5;
+        vy += (Math.random() - 0.5) * 5.5;
+
+        // Uncontrolled shooting of lingering dangerous bullets
+        if (now - lastBossDeathShotTime >= 130) {
+          lastBossDeathShotTime = now;
+          const burstAngle = Math.random() * Math.PI * 2;
+          const speed = 5.5 + Math.random() * 3.5;
+          bossBullets.push({
+            x: renderCoreX + (Math.random() - 0.5) * 60,
+            y: renderCoreY + (Math.random() - 0.5) * 60,
+            vx: Math.cos(burstAngle) * speed,
+            vy: Math.sin(burstAngle) * speed,
+            radius: 4.8
+          });
+        }
+
+        // Frequent sparks & small explosions around core and hands
+        if (Math.random() < 0.8) {
+          const randHand = handPositions[Math.floor(Math.random() * 4)];
+          const targetPt = Math.random() < 0.5 ? { x: renderCoreX, y: renderCoreY } : randHand;
+          spawnBlueCircleExplosion(targetPt.x + (Math.random() - 0.5) * 40, targetPt.y + (Math.random() - 0.5) * 40);
+        }
+
+        // End death phase: Trigger Win Screen
+        if (deathElapsed >= 3800) {
+          isBossDying = false;
+          isWon = true;
+
+          // Huge safe particle burst
+          for (let p = 0; p < 120; p++) {
+            const pAngle = Math.random() * Math.PI * 2;
+            const pSpeed = 2 + Math.random() * 9;
+            particles.push({
+              type: Math.random() < 0.5 ? 'circle' : 'square',
+              x: renderCoreX,
+              y: renderCoreY,
+              vx: Math.cos(pAngle) * pSpeed,
+              vy: Math.sin(pAngle) * pSpeed,
+              radius: 4 + Math.random() * 6,
+              size: 6 + Math.random() * 6,
+              color: Math.random() < 0.5 ? '#60c8ff' : '#ffffff',
+              rotation: Math.random() * Math.PI * 2,
+              vRot: (Math.random() - 0.5) * 0.3,
+              life: 1.0,
+              decay: 0.015 + Math.random() * 0.02
+            });
+          }
+
+          boss.style.opacity = '0';
+          winOverlay.classList.add('active');
+        }
+      }
+
+      // Check Wrench Transformation at 500 HP
+      if (currentHp <= 500 && !wrenchTriggered && isPhase2 && !isCutscene) {
+        wrenchTriggered = true;
+        wrenchTransitioning = true;
+        wrenchStartTime = now;
+        wrenchHandIndex = Math.random() < 0.5 ? 1 : 3;
+      }
+
+      // Phase 2 Cutscene Sequence
+      if (attackState === 'CUTSCENE_PHASE2') {
+        const elapsed = now - cutsceneStartTime;
+        vx *= 0.85;
+        vy *= 0.85;
+
+        const exitTargetX = -280;
+        const exitTargetY = -280;
+
+        if (elapsed < 2000) {
+          const moveProgress = Math.min(1.0, elapsed / 1800);
+          const startHandX = renderCoreX - 190 + 40;
+          const startHandY = renderCoreY + 110 + 40;
+          handPositions[2].x = startHandX + (exitTargetX - startHandX) * moveProgress;
+          handPositions[2].y = startHandY + (exitTargetY - startHandY) * moveProgress;
+        } else if (elapsed < 2400) {
+          if (!cutsceneSwapped) {
+            cutsceneSwapped = true;
+            const handBl = document.getElementById('hand-bl');
+            handBl.src = 'hammerleft.png';
+            handBl.classList.add('hammer');
+          }
+          handPositions[2].x = exitTargetX;
+          handPositions[2].y = exitTargetY;
+        } else if (elapsed < 4200) {
+          const returnProgress = Math.min(1.0, (elapsed - 2400) / 1600);
+          const destHandX = renderCoreX - 190 + 40;
+          const destHandY = renderCoreY + 110 + 40;
+          handPositions[2].x = exitTargetX + (destHandX - exitTargetX) * returnProgress;
+          handPositions[2].y = exitTargetY + (destHandY - exitTargetY) * returnProgress;
+        } else if (elapsed >= 4800) {
+          bossHpContainer.style.opacity = '1';
+          playerHpContainer.style.opacity = '1';
+          isCutscene = false;
+          isPhase2 = true;
+          attackState = 'IDLE';
+          nextAttackTime = now + 1500;
+          pickNewTarget();
+        }
+      }
+
+      // Bullet Rain at 1302 HP
+      if (currentHp <= 1302 && !bulletRainTriggered && !isCutscene && !isPhase2) {
+        bulletRainTriggered = true;
+        attackState = 'ATTACK_BULLET_RAIN';
+        bulletRainStartTime = now;
+        lastRainShotTime = 0;
+        targetX = window.innerWidth / 2;
+        targetY = window.innerHeight * 0.18;
+      }
+
+      if (attackState === 'IDLE' && !isCutscene) {
+        if (now >= nextAttackTime) {
+          if (isPhase2) {
+            let p2Attacks = ['P2_ATTACK_SPIN', 'P2_ATTACK_FOUNTAIN'];
+            if (wrenchTriggered && !wrenchTransitioning && wrenchHandIndex !== -1 && laserBalls.length < 3) {
+              p2Attacks.push('P2_ATTACK_LASER_BALL');
+            }
+            if (currentHp <= 450 && wrenchTriggered && !wrenchTransitioning && wrenchHandIndex !== -1) {
+              p2Attacks.push('P2_ATTACK_WRENCH_SWEEP');
+            }
+            if (lastP2Attack) {
+              p2Attacks = p2Attacks.filter(a => a !== lastP2Attack);
+            }
+            if (p2Attacks.length === 0) p2Attacks = ['P2_ATTACK_SPIN', 'P2_ATTACK_FOUNTAIN'];
+            const choice = p2Attacks[Math.floor(Math.random() * p2Attacks.length)];
+            lastP2Attack = choice;
+
+            if (choice === 'P2_ATTACK_SPIN') {
+              attackState = 'P2_ATTACK_SPIN';
+              spinStartTime = now;
+              lastSpinShotTime = 0;
+              lastSpinCrescentTime = 0;
+              lastSpinShockwaveTime = 0;
+              crescentAngleTracker = Math.random() * Math.PI * 2;
+              hammerRotation = 0;
+            } else if (choice === 'P2_ATTACK_FOUNTAIN') {
+              attackState = 'P2_ATTACK_FOUNTAIN';
+              fountainPhase = 'FOUNTAIN';
+              fountainStartTime = now;
+              lastFountainShotTime = 0;
+              hammerSingleSpin = false;
+              lastHammerSpinTrigger = now + 1200;
+              targetX = window.innerWidth / 2;
+              targetY = window.innerHeight * 0.35;
+            } else if (choice === 'P2_ATTACK_LASER_BALL') {
+              if (laserBalls.length < 3 && wrenchHandIndex !== -1) {
+                attackState = 'P2_ATTACK_LASER_BALL';
+                wrenchSummonState = 'MOVE';
+                wrenchSummonStart = now;
+                wrenchRotation = 0;
+                wrenchSummonTarget = {
+                  x: 120 + Math.random() * (window.innerWidth - 240),
+                  y: 120 + Math.random() * (window.innerHeight * 0.5)
+                };
+              } else {
+                attackState = 'IDLE';
+                nextAttackTime = now + 400;
+              }
+            } else if (choice === 'P2_ATTACK_WRENCH_SWEEP') {
+              if (wrenchHandIndex !== -1) {
+                attackState = 'P2_ATTACK_WRENCH_SWEEP';
+                wrenchSweepPhase = 'MOVE_LEFT';
+                wrenchSweepStartTime = now;
+                wrenchSweepLastOrbTime = 0;
+              } else {
+                attackState = 'IDLE';
+                nextAttackTime = now + 400;
+              }
+            }
+          } else {
+            let availableAttacks = ['ATTACK2_SPIRAL', 'ATTACK4_SWING'];
+            if (currentHp <= 1300 && mainAttacksSinceCharge >= 4) {
+              availableAttacks.push('ATTACK3_OBELISK');
+            }
+            if (currentHp <= 1000) {
+              availableAttacks.push('ATTACK_SHOCKWAVE');
+            }
+
+            if (lastAttack === 'ATTACK3_OBELISK') {
+              availableAttacks = availableAttacks.filter(a => a !== 'ATTACK3_OBELISK');
+            }
+            if (lastAttack === 'ATTACK_SHOCKWAVE' && availableAttacks.length > 1) {
+              availableAttacks = availableAttacks.filter(a => a !== 'ATTACK_SHOCKWAVE');
+            }
+
+            const choice = availableAttacks[Math.floor(Math.random() * availableAttacks.length)];
+
+            if (choice === 'ATTACK2_SPIRAL') {
+              attackState = 'ATTACK2_SPIRAL';
+              lastAttack = 'ATTACK2_SPIRAL';
+              mainAttacksSinceCharge++;
+              spiralStartTime = now;
+              spiralAngle = Math.random() * Math.PI * 2;
+              lastSpiralShotTime = 0;
+            } else if (choice === 'ATTACK3_OBELISK') {
+              attackState = 'ATTACK3_OBELISK';
+              lastAttack = 'ATTACK3_OBELISK';
+              mainAttacksSinceCharge = 0;
+              obeliskPhase = 'CHARGE';
+              obeliskStartTime = now;
+              lastObeliskSpreadTime = 0;
+              obeliskChargeRadius = 0;
+            } else if (choice === 'ATTACK4_SWING') {
+              attackState = 'ATTACK4_SWING';
+              lastAttack = 'ATTACK4_SWING';
+              mainAttacksSinceCharge++;
+              const doDoubleSlash = currentHp <= 1200 && Math.random() < 0.75;
+              swingHandIndices = doDoubleSlash ? [2, 3] : [Math.random() < 0.5 ? 2 : 3];
+              swingStartTime = now;
+              swingCrescentPositions = swingHandIndices.map(() => ({ x: 0, y: 0, angle: 0, alpha: 0 }));
+            } else if (choice === 'ATTACK_SHOCKWAVE') {
+              attackState = 'ATTACK_SHOCKWAVE';
+              lastAttack = 'ATTACK_SHOCKWAVE';
+              mainAttacksSinceCharge++;
+              shockwaveStartTime = now;
+              shockwavePhase = 'CHARGE';
+            }
+          }
+        }
+      }
+
+      if (handSubState === 'IDLE' && !isCutscene && !isPhase2) {
+        if (now >= nextHandAttackTime) {
+          let validHands = [0, 1, 2, 3];
+          if (attackState === 'ATTACK4_SWING' && swingHandIndices.length > 0) {
+            validHands = validHands.filter(h => !swingHandIndices.includes(h));
+          }
+          if (validHands.length > 0) {
+            const numHands = (currentHp <= 1200 && validHands.length >= 2 && Math.random() < 0.75) ? 2 : 1;
+            const shuffled = [...validHands].sort(() => Math.random() - 0.5);
+            handSubIndices = shuffled.slice(0, numHands);
+
+            handSubState = 'CHARGE';
+            handSubChargeStart = now;
+          }
+        }
+      } else if (handSubState === 'CHARGE' && !isCutscene && !isPhase2) {
+        if (now - handSubChargeStart >= 700) {
+          handSubState = 'FIRE';
+          handSubShotsFired = 0;
+          handSubLastShot = 0;
+        }
+      } else if (handSubState === 'FIRE' && !isCutscene && !isPhase2) {
+        const handFireInterval = currentHp <= 800 ? 75 : 90;
+        if (now - handSubLastShot >= handFireInterval) {
+          handSubLastShot = now;
+
+          handSubIndices.forEach((hIdx) => {
+            const pos = handPositions[hIdx];
+            if (!pos) return;
+            fireHandBullet(pos.x, pos.y);
+          });
+
+          handSubShotsFired++;
+
+          if (handSubShotsFired >= 10) {
+            handSubState = 'IDLE';
+            handSubIndices = [];
+            const handCooldown = currentHp <= 800 ? 1600 : 2000;
+            nextHandAttackTime = now + handCooldown + Math.random() * 2000;
+          }
+        }
+      }
+
+      if (attackState === 'P2_ATTACK_WRENCH_SWEEP') {
+        if (wrenchHandIndex < 0 || !handPositions[wrenchHandIndex]) {
+          attackState = 'IDLE';
+          nextAttackTime = now + 500;
+        } else {
+          const wHand = handPositions[wrenchHandIndex];
+          wrenchRotation += 0.48;
+
+          if (wrenchSweepPhase === 'MOVE_LEFT') {
+            const startTargetX = 60;
+            const startTargetY = window.innerHeight * 0.42;
+
+            wHand.x += (startTargetX - wHand.x) * 0.12;
+            wHand.y += (startTargetY - wHand.y) * 0.12;
+
+            if (Math.hypot(startTargetX - wHand.x, startTargetY - wHand.y) < 30) {
+              wrenchSweepPhase = 'SWEEP_RIGHT';
+              wrenchSweepStartTime = now;
+              wrenchSweepLastOrbTime = 0;
+            }
+          } else if (wrenchSweepPhase === 'SWEEP_RIGHT') {
+            const sweepElapsed = now - wrenchSweepStartTime;
+            const sweepDuration = 1800;
+            const progress = Math.min(1.0, sweepElapsed / sweepDuration);
+
+            wHand.x = 60 + (canvas.width - 120) * progress;
+            wHand.y = window.innerHeight * 0.42 + Math.sin(progress * Math.PI * 2) * 40;
+
+            if (now - wrenchSweepLastOrbTime >= 160 && wrenchSweepOrbs.length < 10) {
+              wrenchSweepLastOrbTime = now;
+              wrenchSweepOrbs.push({
+                x: wHand.x,
+                y: wHand.y,
+                radius: 22,
+                spawnTime: now,
+                detonateTime: now + 2400
+              });
+              spawnBlueCircleExplosion(wHand.x, wHand.y);
+            }
+
+            if (progress >= 1.0) {
+              wrenchSweepPhase = 'RETURN';
+            }
+          } else if (wrenchSweepPhase === 'RETURN') {
+            const base = baseOffsets[wrenchHandIndex];
+            const targetReturnX = renderCoreX + base.x + 40;
+            const targetReturnY = renderCoreY + base.y + 40;
+
+            wHand.x += (targetReturnX - wHand.x) * 0.12;
+            wHand.y += (targetReturnY - wHand.y) * 0.12;
+
+            const distToHome = Math.hypot(targetReturnX - wHand.x, targetReturnY - wHand.y);
+            if (distToHome < 35 || (now - wrenchSweepStartTime > 6000)) {
+              attackState = 'IDLE';
+              nextAttackTime = now + 1800;
+              pickNewTarget();
+            }
+          }
+        }
+      }
+
+      if (attackState === 'P2_ATTACK_SPIN') {
+        hammerRotation += 0.55 + Math.sin(now * 0.02) * 0.18;
+        const elapsed = now - spinStartTime;
+        const spinDuration = 7000;
+
+        if (now - lastSpinShotTime >= 90) {
+          lastSpinShotTime = now;
+          const handX = handPositions[2].x;
+          const handY = handPositions[2].y;
+
+          const bulletCount = 10;
+          for (let b = 0; b < bulletCount; b++) {
+            const angle = hammerRotation + (Math.PI * 2 / bulletCount) * b + (Math.random() - 0.5) * 0.3;
+            const speed = 4.8 + Math.random() * 4.2;
+            bossBullets.push({
+              x: handX,
+              y: handY,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              radius: 4.5
+            });
+          }
+        }
+
+        if (now - lastSpinShockwaveTime >= 900) {
+          lastSpinShockwaveTime = now;
+          const handX = handPositions[2].x;
+          const handY = handPositions[2].y;
+
+          const shockBullets = 28;
+          for (let s = 0; s < shockBullets; s++) {
+            const sAngle = (Math.PI * 2 / shockBullets) * s;
+            bossBullets.push({
+              x: handX,
+              y: handY,
+              vx: Math.cos(sAngle) * 5.8,
+              vy: Math.sin(sAngle) * 5.8,
+              radius: 5.2,
+              isShockwave: true
+            });
+          }
+          spawnBlueCircleExplosion(handX, handY);
+        }
+
+        if (now - lastSpinCrescentTime >= 180) {
+          lastSpinCrescentTime = now;
+          const handX = handPositions[2].x;
+          const handY = handPositions[2].y;
+
+          crescentAngleTracker = (crescentAngleTracker + 1.45 + (Math.random() - 0.5) * 0.4) % (Math.PI * 2);
+          crescentProjectiles.push({
+            x: handX,
+            y: handY,
+            vx: Math.cos(crescentAngleTracker) * (13 + Math.random() * 4),
+            vy: Math.sin(crescentAngleTracker) * (13 + Math.random() * 4),
+            angle: crescentAngleTracker,
+            radius: 80,
+            alpha: 1.0
+          });
+        }
+
+        if (elapsed >= spinDuration) {
+          attackState = 'IDLE';
+          nextAttackTime = now + 2000;
+          pickNewTarget();
+        }
+      } else if (attackState === 'P2_ATTACK_LASER_BALL') {
+        if (wrenchHandIndex < 0 || !handPositions[wrenchHandIndex]) {
+          wrenchSummonState = 'IDLE';
+          attackState = 'IDLE';
+          nextAttackTime = now + 500;
+        } else {
+          const elapsed = now - wrenchSummonStart;
+          wrenchRotation += 0.45;
+          const wHand = handPositions[wrenchHandIndex];
+          const targetWrenchX = wrenchSummonTarget.x;
+          const targetWrenchY = wrenchSummonTarget.y;
+
+          wHand.x += (targetWrenchX - wHand.x) * 0.15;
+          wHand.y += (targetWrenchY - wHand.y) * 0.15;
+
+          const dist = Math.hypot(targetWrenchX - wHand.x, targetWrenchY - wHand.y);
+          if (dist < 35 || elapsed > 1500) {
+            if (laserBalls.length < 3) {
+              laserBalls.push({
+                x: targetWrenchX,
+                y: targetWrenchY,
+                radius: 0,
+                phase: 'PLANT',
+                startTime: now,
+                chargeDuration: 2500 + Math.random() * 2000,
+                laserLength: 0,
+                fireStartTime: 0,
+                retractStartTime: 0,
+                fadeStartTime: 0,
+                alpha: 1.0
+              });
+              spawnBlueCircleExplosion(targetWrenchX, targetWrenchY);
+            }
+            wrenchSummonState = 'IDLE';
+            attackState = 'IDLE';
+            nextAttackTime = now + 1200;
+            pickNewTarget();
+          }
+        }
+      } else if (attackState === 'P2_ATTACK_FOUNTAIN') {
+        const dx = targetX - currentX;
+        const dy = targetY - currentY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 30) {
+          vx += (dx / dist * 1.0 - vx) * 0.02;
+          vy += (dy / dist * 1.0 - vy) * 0.02;
+        } else {
+          pickNewTarget();
+        }
+
+        if (!hammerSingleSpin && now >= lastHammerSpinTrigger) {
+          hammerSingleSpin = true;
+          hammerSpinAngle = 0;
+          lastHammerSpinTrigger = now + 1600 + Math.random() * 800;
+        }
+
+        if (hammerSingleSpin) {
+          hammerRotation += 0.68;
+          hammerSpinAngle += 0.68;
+
+          // Mid-spin chaotic bullet spraying
+          if (Math.random() < 0.6) {
+            const hX = handPositions[2].x;
+            const hY = handPositions[2].y;
+            const sprayAngle = hammerRotation + (Math.random() - 0.5) * 1.2;
+            bossBullets.push({
+              x: hX,
+              y: hY,
+              vx: Math.cos(sprayAngle) * (6 + Math.random() * 5),
+              vy: Math.sin(sprayAngle) * (6 + Math.random() * 5),
+              radius: 4.5
+            });
+          }
+
+          if (hammerSpinAngle >= Math.PI * 2) {
+            hammerSingleSpin = false;
+            const pos = handPositions[2];
+            const handX = pos.x;
+            const handY = pos.y;
+
+            const aimAngle = Math.atan2(playerY - handY, playerX - handX);
+            const bulletCount = 20;
+            const spread = Math.PI * 1.2;
+            for (let i = 0; i < bulletCount; i++) {
+              const ang = aimAngle - spread / 2 + (spread / (bulletCount - 1)) * i + (Math.random() - 0.5) * 0.2;
+              const speed = 5.0 + Math.random() * 5.5;
+              bossBullets.push({
+                x: handX,
+                y: handY,
+                vx: Math.cos(ang) * speed,
+                vy: Math.sin(ang) * speed,
+                radius: 4.8
+              });
+            }
+
+            // Fire shockwave & crescent on single spin completion
+            for (let s = 0; s < 18; s++) {
+              const sAngle = (Math.PI * 2 / 18) * s;
+              bossBullets.push({
+                x: handX,
+                y: handY,
+                vx: Math.cos(sAngle) * 6.5,
+                vy: Math.sin(sAngle) * 6.5,
+                radius: 5.0,
+                isShockwave: true
+              });
+            }
+            crescentProjectiles.push({
+              x: handX,
+              y: handY,
+              vx: Math.cos(aimAngle) * 16,
+              vy: Math.sin(aimAngle) * 16,
+              angle: aimAngle,
+              radius: 90,
+              alpha: 1.0
+            });
+            spawnBlueCircleExplosion(handX, handY);
+          }
+        }
+
+        const elapsed = now - fountainStartTime;
+
+        if (now - lastFountainShotTime >= 45) {
+          lastFountainShotTime = now;
+          for (let f = 0; f < 2; f++) {
+            const upwardAngle = -Math.PI / 2 + (Math.random() - 0.5) * 0.85;
+            const flameSpeed = 8.5 + Math.random() * 5.0;
+            bossBullets.push({
+              x: renderCoreX + (Math.random() - 0.5) * 20,
+              y: renderCoreY - 30,
+              vx: Math.cos(upwardAngle) * flameSpeed,
+              vy: Math.sin(upwardAngle) * flameSpeed,
+              radius: 4.5
+            });
+          }
+
+          if (elapsed >= 800) {
+            bossBullets.push({
+              x: Math.random() * canvas.width,
+              y: -15,
+              baseVx: (Math.random() - 0.5) * 0.4,
+              vx: 0,
+              vy: 1.8 + Math.random() * 1.4,
+              radius: 4.5,
+              isLeaf: true,
+              swayPhase: Math.random() * Math.PI * 2,
+              swayAmp: 2.2 + Math.random() * 1.8,
+              swayFreq: 0.04 + Math.random() * 0.02,
+              swayTime: 0
+            });
+          }
+        }
+
+        if (elapsed >= 6000) {
+          attackState = 'IDLE';
+          nextAttackTime = now + 2000;
+          pickNewTarget();
+        }
+      } else if (attackState === 'ATTACK_BULLET_RAIN') {
+        vx *= 0.85;
+        vy *= 0.85;
+        const elapsed = now - bulletRainStartTime;
+        handRotateAngle += 0.08;
+
+        const rotRadius = 140;
+        for (let h = 0; h < 4; h++) {
+          const hAngle = handRotateAngle + (Math.PI / 2) * h;
+          handPositions[h].x = renderCoreX + Math.cos(hAngle) * rotRadius;
+          handPositions[h].y = renderCoreY + Math.sin(hAngle) * rotRadius;
+        }
+
+        if (now - lastRainShotTime >= 60) {
+          lastRainShotTime = now;
+          const spreadX = (Math.random() - 0.5) * 200;
+          const speedY = 7 + Math.random() * 4;
+          const speedX = (Math.random() - 0.5) * 3;
+          bossBullets.push({
+            x: renderCoreX + spreadX,
+            y: renderCoreY + 40,
+            vx: speedX,
+            vy: speedY,
+            radius: 4.5
+          });
+        }
+
+        if (elapsed >= 5000) {
+          attackState = 'IDLE';
+          nextAttackTime = now + 2000;
+          pickNewTarget();
+        }
+      } else if (attackState === 'ATTACK2_SPIRAL') {
+        vx *= 0.85;
+        vy *= 0.85;
+
+        const interval = currentHp <= 800 ? 45 : 55;
+
+        if (now - lastSpiralShotTime >= interval) {
+          lastSpiralShotTime = now;
+          spiralAngle += currentHp <= 800 ? 0.16 : 0.13;
+          fireSpiralBullets(renderCoreX, renderCoreY, spiralAngle);
+        }
+
+        if (now - spiralStartTime >= 4500) {
+          attackState = 'IDLE';
+          nextAttackTime = now + 1800 + Math.random() * 1000;
+          pickNewTarget();
+        }
+      } else if (attackState === 'ATTACK4_SWING') {
+        vx *= 0.85;
+        vy *= 0.85;
+
+        const elapsed = now - swingStartTime;
+        const progress = Math.min(1.0, elapsed / swingDuration);
+
+        swingHandIndices.forEach((hIdx, i) => {
+          const startAngle = hIdx === 2 ? Math.PI * 0.75 : Math.PI * 0.25;
+          const endAngle = hIdx === 2 ? Math.PI * 0.1 : Math.PI * 0.9;
+          const currentArcAngle = startAngle + (endAngle - startAngle) * progress;
+          const radius = 160;
+
+          const handArcX = renderCoreX + Math.cos(currentArcAngle) * radius;
+          const handArcY = renderCoreY + Math.sin(currentArcAngle) * radius;
+
+          handPositions[hIdx].x = handArcX;
+          handPositions[hIdx].y = handArcY;
+
+          swingCrescentPositions[i] = {
+            x: handArcX,
+            y: handArcY,
+            alpha: Math.min(1.0, progress * 1.6),
+            angle: Math.atan2(playerY - handArcY, playerX - handArcX)
+          };
+        });
+
+        if (progress >= 1.0) {
+          const crescentRadius = currentHp <= 800 ? 98 : 75;
+          const crescentSpeed = currentHp <= 800 ? 15.5 : 14;
+
+          swingCrescentPositions.forEach(cPos => {
+            const aimAngle = Math.atan2(playerY - cPos.y, playerX - cPos.x);
+            crescentProjectiles.push({
+              x: cPos.x,
+              y: cPos.y,
+              vx: Math.cos(aimAngle) * crescentSpeed,
+              vy: Math.sin(aimAngle) * crescentSpeed,
+              angle: aimAngle,
+              radius: crescentRadius,
+              alpha: 1.0
+            });
+          });
+
+          attackState = 'IDLE';
+          swingHandIndices = [];
+          nextAttackTime = now + 1800 + Math.random() * 1000;
+        }
+      } else if (attackState === 'ATTACK_SHOCKWAVE') {
+        vx *= 0.85;
+        vy *= 0.85;
+
+        const elapsed = now - shockwaveStartTime;
+        const chargeDuration = 800;
+
+        if (shockwavePhase === 'CHARGE') {
+          if (elapsed >= chargeDuration) {
+            shockwavePhase = 'RELEASE';
+            fireShockwave(renderCoreX, renderCoreY);
+          }
+        } else if (shockwavePhase === 'RELEASE') {
+          if (elapsed >= chargeDuration + 600) {
+            attackState = 'IDLE';
+            nextAttackTime = now + 1800 + Math.random() * 1000;
+            pickNewTarget();
+          }
+        }
+      } else if (attackState === 'ATTACK3_OBELISK') {
+        if (obeliskPhase === 'CHARGE') {
+          const elapsed = now - obeliskStartTime;
+          obeliskChargeRadius = Math.min(obeliskMaxRadius, (elapsed / obeliskChargeDuration) * obeliskMaxRadius);
+
+          targetX = playerX;
+          targetY = Math.min(window.innerHeight * 0.42, playerY - 190);
+
+          const dx = targetX - currentX;
+          const dy = targetY - currentY;
+          vx += (dx * 0.05 - vx) * 0.1;
+          vy += (dy * 0.05 - vy) * 0.1;
+
+          if (now - lastObeliskSpreadTime >= 850) {
+            lastObeliskSpreadTime = now;
+            fireObeliskSpread(currentX, currentY);
+          }
+
+          if (elapsed >= obeliskChargeDuration) {
+            obeliskPhase = 'LOCK';
+            obeliskLockStartTime = now;
+            obeliskLockedX = currentX;
+            obeliskLockedY = currentY;
+          }
+        } else if (obeliskPhase === 'LOCK') {
+          vx *= 0.8;
+          vy *= 0.8;
+
+          if (now - obeliskLockStartTime >= 850) {
+            obeliskPhase = 'BEAM';
+            obeliskBeamStartTime = now;
+            lastObeliskSpreadTime = now;
+          }
+        } else if (obeliskPhase === 'BEAM') {
+          vx *= 0.7;
+          vy *= 0.7;
+
+          if (currentHp <= 800 && now - lastObeliskSpreadTime >= 200) {
+            lastObeliskSpreadTime = now;
+            const cannonBaseY = currentY + (canvas.height - currentY) * 0.95;
+            const spreadCount = 4;
+            for (let s = 0; s < spreadCount; s++) {
+              const spreadAngle = Math.PI * 0.15 + (s / (spreadCount - 1)) * (Math.PI * 0.7);
+              const speed = 5.2;
+              bossBullets.push({
+                x: currentX + (Math.random() - 0.5) * obeliskBeamWidth * 0.8,
+                y: cannonBaseY,
+                vx: Math.cos(spreadAngle) * speed,
+                vy: Math.sin(spreadAngle) * speed,
+                radius: 4.5
+              });
+            }
+          }
+
+          if (now - obeliskBeamStartTime >= 1800) {
+            attackState = 'IDLE';
+            nextAttackTime = now + 2200 + Math.random() * 1200;
+            pickNewTarget(true);
+          }
+        }
+      } else if (attackState !== 'CUTSCENE_PHASE2') {
+        const dx = targetX - currentX;
+        const dy = targetY - currentY;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance < 120) {
+          pickNewTarget();
+        }
+
+        const maxSpeed = isPhase2 ? 3.2 : 1.8;
+        const desiredVx = (dx / (distance || 1)) * Math.min(distance * 0.02, maxSpeed);
+        const desiredVy = (dy / (distance || 1)) * Math.min(distance * 0.02, maxSpeed);
+
+        const accel = isPhase2 ? 0.04 : 0.02;
+        vx += (desiredVx - vx) * accel;
+        vy += (desiredVy - vy) * accel;
+      }
+
+      currentX += vx;
+      currentY += vy;
+
+      // Screen boundary clamping so boss never leaves visible area
+      const minBossX = 180;
+      const maxBossX = window.innerWidth - 180;
+      const minBossY = 120;
+      const maxBossY = window.innerHeight * 0.55;
+
+      currentX = Math.max(minBossX, Math.min(maxBossX, currentX));
+      currentY = Math.max(minBossY, Math.min(maxBossY, currentY));
+
+      renderCoreX = currentX + floatX;
+      renderCoreY = currentY + floatY;
+
+      boss.style.transform = `translate(${renderCoreX}px, ${renderCoreY}px)`;
+
+      hands.forEach((hand, index) => {
+        const config = handConfigs[index];
+        let pos = handPositions[index];
+
+        if (wrenchTransitioning && index === wrenchHandIndex) {
+          const wElapsed = now - wrenchStartTime;
+          const exitX = window.innerWidth + 280;
+          const exitY = -280;
+          const startHandX = renderCoreX + (index === 1 ? 110 : 110) + 40;
+          const startHandY = renderCoreY + (index === 1 ? -190 : 110) + 40;
+
+          if (wElapsed < 1200) {
+            const prog = Math.min(1.0, wElapsed / 1000);
+            pos.x = startHandX + (exitX - startHandX) * (prog * prog);
+            pos.y = startHandY + (exitY - startHandY) * (prog * prog);
+          } else if (wElapsed < 1500) {
+            const targetId = index === 1 ? 'hand-tr' : 'hand-br';
+            const handEl = document.getElementById(targetId);
+            if (handEl && !handEl.src.includes('wrenchright.png')) {
+              handEl.src = 'wrenchright.png';
+              handEl.classList.add('wrench');
+            }
+            pos.x = exitX;
+            pos.y = exitY;
+          } else if (wElapsed < 2700) {
+            const returnProg = Math.min(1.0, (wElapsed - 1500) / 1000);
+            const easeReturn = 1 - Math.pow(1 - returnProg, 2);
+            pos.x = exitX + (startHandX - exitX) * easeReturn;
+            pos.y = exitY + (startHandY - exitY) * easeReturn;
+          } else {
+            wrenchTransitioning = false;
+          }
+        } else if (attackState === 'CUTSCENE_PHASE2' && index === 2) {
+          // Hand position directly controlled in cutscene
+        } else if (wrenchSummonState === 'MOVE' && index === wrenchHandIndex) {
+          // Hand position directly controlled during Laser Ball summon
+        } else if (attackState === 'P2_ATTACK_WRENCH_SWEEP' && index === wrenchHandIndex) {
+          // Hand position directly controlled during Wrench Sweep
+        } else {
+          const handFloatX = Math.sin(time * config.floatFreqX + config.phase) * config.floatAmpX;
+          const handFloatY = Math.cos(time * config.floatFreqY + config.phase) * config.floatAmpY;
+
+          const base = baseOffsets[index];
+          const targetHandX = renderCoreX + base.x + 40 + handFloatX;
+          const targetHandY = renderCoreY + base.y + 40 + handFloatY;
+
+          pos.x += (targetHandX - pos.x) * config.speed;
+          pos.y += (targetHandY - pos.y) * config.speed;
+        }
+
+        const offsetX = pos.x - renderCoreX;
+        const offsetY = pos.y - renderCoreY;
+
+        const base = baseOffsets[index];
+        let rotTransform = '';
+        if (index === 2 && hammerRotation !== 0) {
+          rotTransform = ` rotate(${hammerRotation}rad)`;
+        } else if (index === wrenchHandIndex && wrenchRotation !== 0) {
+          rotTransform = ` rotate(${wrenchRotation}rad)`;
+        }
+        hand.style.transform = `translate(${base.x + (offsetX - base.x - 40)}px, ${base.y + (offsetY - base.y - 40)}px)${rotTransform}`;
+      });
+
+      if (!isCutscene) {
+        let moveX = 0;
+        let moveY = 0;
+
+        if (keys.w) moveY -= 1;
+        if (keys.s) moveY += 1;
+        if (keys.a) moveX -= 1;
+        if (keys.d) moveX += 1;
+
+        if (moveX !== 0 && moveY !== 0) {
+          moveX *= 0.7071;
+          moveY *= 0.7071;
+        }
+
+        playerX += moveX * playerSpeed;
+        playerY += moveY * playerSpeed;
+      }
+
+      // Core pushbox collision
+      const pdx = playerX - renderCoreX;
+      const pdy = playerY - renderCoreY;
+      const pDist = Math.hypot(pdx, pdy);
+      const pushRadius = 85;
+
+      if (pDist < pushRadius) {
+        const overlap = pushRadius - pDist;
+        const nx = pDist > 0 ? (pdx / pDist) : 0;
+        const ny = pDist > 0 ? (pdy / pDist) : 1;
+        playerX += nx * overlap;
+        playerY += ny * overlap;
+      }
+
+      const playerRadius = 10;
+      playerX = Math.max(playerRadius, Math.min(window.innerWidth - playerRadius, playerX));
+      playerY = Math.max(playerRadius, Math.min(window.innerHeight - playerRadius, playerY));
+
+      player.style.transform = `translate(${playerX}px, ${playerY}px)`;
+
+      const angle = Math.atan2(mouseY - playerY, mouseX - playerX);
+      playerPointer.style.transform = `rotate(${angle}rad)`;
+
+      if (isMouseDown && !isCutscene && now - lastShootTime >= shootInterval) {
+        shootBullet(angle);
+        lastShootTime = now;
+      }
+
+      displayHp += (currentHp - displayHp) * 0.15;
+      hpFill.style.width = Math.max(0, (displayHp / maxHp) * 100) + '%';
+
+      displayPlayerHp += (playerHp - displayPlayerHp) * 0.2;
+      playerHpFill.style.width = Math.max(0, (displayPlayerHp / maxPlayerHp) * 100) + '%';
+      playerHpText.innerText = `HP: ${Math.ceil(playerHp)} / ${maxPlayerHp}`;
+
+      updateCombat(renderCoreX, renderCoreY);
+
+      requestAnimationFrame(update);
+    }
+
+    function fireHandBullet(startX, startY) {
+      const aimAngle = Math.atan2(playerY - startY, playerX - startX);
+      const speed = currentHp <= 800 ? 8.2 : 7.5;
+      bossBullets.push({
+        x: startX,
+        y: startY,
+        vx: Math.cos(aimAngle) * speed,
+        vy: Math.sin(aimAngle) * speed,
+        radius: 4.5
+      });
+    }
+
+    function fireSpiralBullets(coreX, coreY, angle) {
+      const speed = currentHp <= 800 ? 7.2 : 6.5;
+      const angles = [angle, angle + Math.PI];
+      const spread = 0.07;
+
+      angles.forEach(a => {
+        [-spread, 0, spread].forEach(offset => {
+          const finalAngle = a + offset;
+          bossBullets.push({
+            x: coreX,
+            y: coreY,
+            vx: Math.cos(finalAngle) * speed,
+            vy: Math.sin(finalAngle) * speed,
+            radius: 4.0
+          });
+        });
+      });
+    }
+
+    function fireObeliskSpread(coreX, coreY) {
+      const baseAngle = Math.atan2(playerY - coreY, playerX - coreX) + (Math.random() - 0.5) * 0.18;
+      const count = currentHp <= 800 ? 6 : 5;
+      const spreadArc = 0.55;
+      const startAngle = baseAngle - spreadArc / 2;
+      const step = spreadArc / (count - 1);
+
+      for (let i = 0; i < count; i++) {
+        const angle = startAngle + i * step;
+        const speed = 6.2;
+        bossBullets.push({
+          x: coreX,
+          y: coreY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: 4.2
+        });
+      }
+    }
+
+    function fireShockwave(coreX, coreY) {
+      const bulletsPerHand = 52;
+      const speed = 6.2;
+      for (let h = 0; h < 4; h++) {
+        const pos = handPositions[h];
+        const handX = pos.x;
+        const handY = pos.y;
+
+        for (let i = 0; i < bulletsPerHand; i++) {
+          const angle = (Math.PI * 2 / bulletsPerHand) * i;
+          bossBullets.push({
+            x: handX,
+            y: handY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            radius: 4.8,
+            isShockwave: true
+          });
+        }
+        spawnBlueCircleExplosion(handX, handY);
+      }
+
+      const bulletsCore = 80;
+      const coreSpeed = 7.0;
+      for (let i = 0; i < bulletsCore; i++) {
+        const angle = (Math.PI * 2 / bulletsCore) * i;
+        bossBullets.push({
+          x: coreX,
+          y: coreY,
+          vx: Math.cos(angle) * coreSpeed,
+          vy: Math.sin(angle) * coreSpeed,
+          radius: 5.8,
+          isShockwave: true
+        });
+      }
+      spawnBlueCircleExplosion(coreX, coreY);
+    }
+
+    function shootBullet(angle) {
+      const bulletSpeed = 15;
+      bullets.push({
+        x: playerX,
+        y: playerY,
+        vx: Math.cos(angle) * bulletSpeed,
+        vy: Math.sin(angle) * bulletSpeed,
+        radius: 3
+      });
+    }
+
+    function spawnBlueCircleExplosion(x, y) {
+      const count = 8;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i + (Math.random() * 0.4);
+        const speed = 0.8 + Math.random() * 1.2;
+        particles.push({
+          type: 'circle',
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: 3 + Math.random() * 3,
+          color: '#60c8ff',
+          life: 1.0,
+          decay: 0.05 + Math.random() * 0.03
+        });
+      }
+    }
+
+    function spawnGreySquareExplosion(x, y) {
+      const count = 8;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i + (Math.random() * 0.4);
+        const speed = 0.8 + Math.random() * 1.2;
+        particles.push({
+          type: 'square',
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: 5 + Math.random() * 3,
+          color: '#888888',
+          rotation: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 0.2,
+          life: 1.0,
+          decay: 0.05 + Math.random() * 0.03
+        });
+      }
+    }
+
+    function drawCrescentMoon(ctx, x, y, radius, angle, alpha) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+
+      ctx.fillStyle = '#b3f0ff';
+      ctx.shadowColor = '#00d5ff';
+      ctx.shadowBlur = 22;
+
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, -Math.PI * 0.5, Math.PI * 0.5, false);
+      ctx.arc(radius * 0.35, 0, radius * 0.75, Math.PI * 0.5, -Math.PI * 0.5, true);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.85, -Math.PI * 0.45, Math.PI * 0.45, false);
+      ctx.arc(radius * 0.32, 0, radius * 0.65, Math.PI * 0.45, -Math.PI * 0.45, true);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function updateCombat(coreX, coreY) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const now = performance.now();
+
+      for (let wIdx = wrenchSweepOrbs.length - 1; wIdx >= 0; wIdx--) {
+        const orb = wrenchSweepOrbs[wIdx];
+
+        if (now >= orb.detonateTime) {
+          const ringBullets = 12;
+          const ringSpeed = 5.2;
+          for (let b = 0; b < ringBullets; b++) {
+            const angle = (Math.PI * 2 / ringBullets) * b;
+            bossBullets.push({
+              x: orb.x,
+              y: orb.y,
+              vx: Math.cos(angle) * ringSpeed,
+              vy: Math.sin(angle) * ringSpeed,
+              radius: 4.5
+            });
+          }
+          spawnBlueCircleExplosion(orb.x, orb.y);
+          wrenchSweepOrbs.splice(wIdx, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.fillStyle = '#00d5ff';
+        ctx.shadowColor = '#00d5ff';
+        ctx.shadowBlur = 24;
+        ctx.beginPath();
+        ctx.arc(orb.x, orb.y, orb.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#0088cc';
+        ctx.beginPath();
+        ctx.arc(orb.x, orb.y, orb.radius * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const distToPlayer = Math.hypot(orb.x - playerX, orb.y - playerY);
+        if (distToPlayer <= orb.radius + 10) {
+          playerHp = Math.max(0, playerHp - 3);
+          spawnBlueCircleExplosion(orb.x, orb.y);
+          if (playerHp <= 0) triggerDeath();
+        }
+      }
+
+      for (let lbIdx = laserBalls.length - 1; lbIdx >= 0; lbIdx--) {
+        const ball = laserBalls[lbIdx];
+        const lbElapsed = now - ball.startTime;
+
+        if (ball.phase === 'PLANT') {
+          ball.radius = Math.min(22, ball.radius + 1.5);
+          if (lbElapsed > 350) {
+            ball.phase = 'CHARGING';
+          }
+        } else if (ball.phase === 'CHARGING') {
+          ball.radius = 22 + Math.sin(now * 0.015) * 4;
+
+          const remainingCharge = ball.chargeDuration - lbElapsed;
+          if (remainingCharge <= 1000) {
+            const alphaProgress = Math.min(0.7, (1000 - remainingCharge) / 1000);
+            ctx.save();
+            ctx.strokeStyle = `rgba(0, 213, 255, ${alphaProgress})`;
+            ctx.shadowColor = '#00d5ff';
+            ctx.shadowBlur = 8;
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([8, 8]);
+
+            for (let k = 0; k < 8; k++) {
+              const lAngle = (Math.PI / 4) * k;
+              ctx.beginPath();
+              ctx.moveTo(ball.x, ball.y);
+              ctx.lineTo(ball.x + Math.cos(lAngle) * 1200, ball.y + Math.sin(lAngle) * 1200);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+
+          if (lbElapsed >= ball.chargeDuration) {
+            ball.phase = 'FIRE';
+            ball.fireStartTime = now;
+          }
+        } else if (ball.phase === 'FIRE') {
+          const fireElapsed = now - ball.fireStartTime;
+          ball.laserLength = Math.min(1200, ball.laserLength + 80);
+          if (fireElapsed > 1200) {
+            ball.phase = 'RETRACT';
+            ball.retractStartTime = now;
+          }
+        } else if (ball.phase === 'RETRACT') {
+          const retractElapsed = now - ball.retractStartTime;
+          ball.laserLength = Math.max(0, ball.laserLength - 90);
+          if (ball.laserLength <= 0 || retractElapsed > 300) {
+            ball.phase = 'FADE';
+            ball.fadeStartTime = now;
+          }
+        } else if (ball.phase === 'FADE') {
+          const fadeElapsed = now - ball.fadeStartTime;
+          ball.alpha = Math.max(0, ball.alpha - 0.08);
+          if (ball.alpha <= 0 || fadeElapsed > 300) {
+            laserBalls.splice(lbIdx, 1);
+            continue;
+          }
+        }
+
+        ctx.save();
+        ctx.globalAlpha = ball.alpha;
+
+        if ((ball.phase === 'FIRE' || ball.phase === 'RETRACT') && ball.laserLength > 0) {
+          for (let k = 0; k < 8; k++) {
+            const lAngle = (Math.PI / 4) * k;
+            const ex = ball.x + Math.cos(lAngle) * ball.laserLength;
+            const ey = ball.y + Math.sin(lAngle) * ball.laserLength;
+
+            ctx.strokeStyle = '#00d5ff';
+            ctx.shadowColor = '#00d5ff';
+            ctx.shadowBlur = 18;
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.moveTo(ball.x, ball.y);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.shadowBlur = 0;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(ball.x, ball.y);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+
+            if (ball.phase === 'FIRE') {
+              const dx = playerX - ball.x;
+              const dy = playerY - ball.y;
+              const dirX = Math.cos(lAngle);
+              const dirY = Math.sin(lAngle);
+              const proj = dx * dirX + dy * dirY;
+
+              if (proj >= 0 && proj <= ball.laserLength) {
+                const perpDist = Math.hypot(dx - proj * dirX, dy - proj * dirY);
+                if (perpDist <= 14) {
+                  playerHp = Math.max(0, playerHp - 0.25);
+                  spawnBlueCircleExplosion(playerX, playerY);
+                  if (playerHp <= 0) triggerDeath();
+                }
+              }
+            }
+          }
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#00d5ff';
+        ctx.shadowBlur = 24;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#60c8ff';
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      if (attackState === 'ATTACK3_OBELISK') {
+        if (obeliskPhase === 'CHARGE' || obeliskPhase === 'LOCK') {
+          ctx.save();
+          const pulse = obeliskPhase === 'LOCK' ? Math.sin(now * 0.03) * 4 : 0;
+          const currentR = Math.max(2, obeliskChargeRadius + pulse);
+
+          ctx.fillStyle = 'rgba(190, 242, 255, 0.85)';
+          ctx.shadowColor = '#80e5ff';
+          ctx.shadowBlur = 22;
+
+          ctx.beginPath();
+          ctx.arc(coreX - 3, coreY + 28, currentR, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+        } else if (obeliskPhase === 'BEAM') {
+          const bx = currentX;
+          const by = coreY;
+          const halfW = obeliskBeamWidth / 2;
+          const maxBeamLen = canvas.height - by;
+
+          const beamElapsed = now - obeliskBeamStartTime;
+          const growDuration = 350;
+          const growProgress = Math.min(1.0, beamElapsed / growDuration);
+          const currentBeamLen = maxBeamLen * growProgress;
+          const tipLen = Math.min(60, currentBeamLen);
+
+          ctx.save();
+          const grad = ctx.createLinearGradient(bx - halfW, by, bx + halfW, by);
+          grad.addColorStop(0, '#00aacc');
+          grad.addColorStop(0.3, '#00d5ff');
+          grad.addColorStop(0.5, '#ffffff');
+          grad.addColorStop(0.7, '#00d5ff');
+          grad.addColorStop(1, '#00aacc');
+
+          ctx.fillStyle = grad;
+          ctx.shadowColor = '#00d5ff';
+          ctx.shadowBlur = 30;
+
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + halfW, by + tipLen);
+          ctx.lineTo(bx + halfW, by + currentBeamLen);
+          ctx.lineTo(bx - halfW, by + currentBeamLen);
+          ctx.lineTo(bx - halfW, by + tipLen);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          const innerW = halfW * 0.45;
+          const innerTipLen = tipLen * 0.7;
+          ctx.beginPath();
+          ctx.moveTo(bx, by + 4);
+          ctx.lineTo(bx + innerW, by + innerTipLen);
+          ctx.lineTo(bx + innerW, by + currentBeamLen);
+          ctx.lineTo(bx - innerW, by + currentBeamLen);
+          ctx.lineTo(bx - innerW, by + innerTipLen);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.restore();
+
+          const inX = Math.abs(playerX - bx) <= halfW + 6;
+          const inY = playerY >= by && playerY <= by + currentBeamLen;
+          if (inX && inY && now - lastObeliskDamageTime >= 140) {
+            lastObeliskDamageTime = now;
+            playerHp = Math.max(0, playerHp - 4);
+            spawnBlueCircleExplosion(playerX, playerY);
+            if (playerHp <= 0) triggerDeath();
+          }
+        }
+      }
+
+      if (handSubState !== 'IDLE' && handSubIndices.length > 0) {
+        handSubIndices.forEach((hIdx) => {
+          const pos = handPositions[hIdx];
+          if (!pos) return;
+
+          ctx.save();
+          ctx.fillStyle = 'rgba(160, 230, 255, 0.65)';
+          ctx.shadowColor = '#60c8ff';
+          ctx.shadowBlur = 14;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 16, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      if (attackState === 'ATTACK4_SWING') {
+        const crescentRadius = currentHp <= 800 ? 98 : 75;
+        swingCrescentPositions.forEach(cPos => {
+          drawCrescentMoon(ctx, cPos.x, cPos.y, crescentRadius, cPos.angle, cPos.alpha);
+        });
+      }
+
+      if (attackState === 'ATTACK_SHOCKWAVE' && shockwavePhase === 'CHARGE') {
+        const elapsed = performance.now() - shockwaveStartTime;
+        const pulseScale = 1 + Math.sin(elapsed * 0.025) * 0.35;
+
+        for (let h = 0; h < 4; h++) {
+          const pos = handPositions[h];
+          const offsetX = pos.x - coreX;
+          const offsetY = pos.y - coreY;
+          const base = baseOffsets[h];
+          const handX = coreX + base.x + (offsetX - base.x - 40) + 40;
+          const handY = coreY + base.y + (offsetY - base.y - 40) + 40;
+
+          ctx.save();
+          ctx.fillStyle = 'rgba(0, 213, 255, 0.45)';
+          ctx.shadowColor = '#00d5ff';
+          ctx.shadowBlur = 20 * pulseScale;
+          ctx.beginPath();
+          ctx.arc(handX, handY, 26 * pulseScale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        if (currentHp <= 900) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(0, 213, 255, 0.45)';
+          ctx.shadowColor = '#00d5ff';
+          ctx.shadowBlur = 35 * pulseScale;
+          ctx.beginPath();
+          ctx.arc(coreX, coreY, 68 * pulseScale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+
+        if (b.x < -20 || b.x > canvas.width + 20 || b.y < -20 || b.y > canvas.height + 20) {
+          bullets.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#60c8ff';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const distToCore = Math.hypot(b.x - coreX, b.y - coreY);
+        const weakpointRadius = 78;
+        const coreArmorRadius = 88;
+
+        if (distToCore <= weakpointRadius) {
+          if (!isCutscene && !isBossDying && !isWon) {
+            currentHp = Math.max(0, currentHp - 3);
+            if (currentHp <= 0) {
+              isBossDying = true;
+              bossDeathStartTime = now;
+              lastBossDeathShotTime = now;
+              attackState = 'BOSS_DYING';
+              handSubState = 'IDLE';
+            }
+          }
+          spawnBlueCircleExplosion(b.x, b.y);
+          bullets.splice(i, 1);
+          continue;
+        }
+
+        if (distToCore <= coreArmorRadius) {
+          spawnGreySquareExplosion(b.x, b.y);
+          bullets.splice(i, 1);
+          continue;
+        }
+
+        let handHit = false;
+
+        for (let h = 0; h < 4; h++) {
+          const pos = handPositions[h];
+          const offsetX = pos.x - coreX;
+          const offsetY = pos.y - coreY;
+          const base = baseOffsets[h];
+
+          const handX = coreX + base.x + (offsetX - base.x - 40) + 40;
+          const handY = coreY + base.y + (offsetY - base.y - 40) + 40;
+
+          const distToHand = Math.hypot(b.x - handX, b.y - handY);
+          if (distToHand <= 38) {
+            handHit = true;
+            break;
+          }
+        }
+
+        if (handHit) {
+          spawnGreySquareExplosion(b.x, b.y);
+          bullets.splice(i, 1);
+          continue;
+        }
+      }
+
+      for (let i = bossBullets.length - 1; i >= 0; i--) {
+        const bb = bossBullets[i];
+
+        if (bb.isLeaf) {
+          bb.swayTime += bb.swayFreq;
+          const swayVx = bb.baseVx + Math.sin(bb.swayTime + bb.swayPhase) * bb.swayAmp;
+          bb.x += swayVx;
+          bb.y += bb.vy;
+        } else {
+          bb.x += bb.vx;
+          bb.y += bb.vy;
+        }
+
+        if (bb.x < -20 || bb.x > canvas.width + 20 || bb.y < -20 || bb.y > canvas.height + 20) {
+          bossBullets.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.fillStyle = '#00d5ff';
+        ctx.shadowColor = '#0088cc';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(bb.x, bb.y, bb.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const distToPlayer = Math.hypot(bb.x - playerX, bb.y - playerY);
+        if (distToPlayer <= bb.radius + 10) {
+          const damage = bb.isShockwave ? 4 : 1;
+          playerHp = Math.max(0, playerHp - damage);
+          spawnBlueCircleExplosion(bb.x, bb.y);
+          bossBullets.splice(i, 1);
+
+          if (playerHp <= 0) triggerDeath();
+          continue;
+        }
+      }
+
+      // Crescent projectiles
+      for (let i = crescentProjectiles.length - 1; i >= 0; i--) {
+        const cp = crescentProjectiles[i];
+        cp.x += cp.vx;
+        cp.y += cp.vy;
+
+        if (cp.x < -60 || cp.x > canvas.width + 60 || cp.y < -60 || cp.y > canvas.height + 60) {
+          crescentProjectiles.splice(i, 1);
+          continue;
+        }
+
+        drawCrescentMoon(ctx, cp.x, cp.y, cp.radius, cp.angle, cp.alpha);
+
+        const distToPlayer = Math.hypot(cp.x - playerX, cp.y - playerY);
+        if (distToPlayer <= cp.radius + 10) {
+          playerHp = Math.max(0, playerHp - 3);
+          spawnBlueCircleExplosion(cp.x, cp.y);
+          crescentProjectiles.splice(i, 1);
+
+          if (playerHp <= 0) triggerDeath();
+          continue;
+        }
+      }
+
+      for (let p = particles.length - 1; p >= 0; p--) {
+        const pt = particles[p];
+        pt.x += pt.vx;
+        pt.y += pt.vy;
+        pt.life -= pt.decay;
+
+        if (pt.life <= 0) {
+          particles.splice(p, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, pt.life);
+
+        if (pt.type === 'circle') {
+          ctx.fillStyle = pt.color;
+          ctx.shadowColor = pt.color;
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, pt.radius * pt.life, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (pt.type === 'square') {
+          pt.rotation += pt.vRot;
+          ctx.fillStyle = pt.color;
+          ctx.translate(pt.x, pt.y);
+          ctx.rotate(pt.rotation);
+          const currentSize = pt.size * pt.life;
+          ctx.fillRect(-currentSize / 2, -currentSize / 2, currentSize, currentSize);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    window.onload = function() {
+      requestAnimationFrame(update);
+    };
+  </script>
+</body>
+</html>
